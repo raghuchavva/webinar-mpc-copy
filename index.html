@@ -79,6 +79,13 @@
     }
     .msg.error { color: #dc2626; }
     .msg.ok { color: #059669; }
+    #alreadyRegistered { display: none; text-align: center; }
+    #alreadyRegistered h2 { font-size: 20px; color: #1a1a2e; margin: 0 0 8px; }
+    #alreadyRegistered p { font-size: 14px; color: #6b7280; margin: 0 0 20px; }
+    .btn-ghost { display: inline-block; margin-top: 14px; font-size: 13px; color: #9ca3af;
+      cursor: pointer; background: none; border: none; width: auto; padding: 0;
+      text-decoration: underline; }
+    .btn-ghost:hover { color: #6b7280; background: none; }
   </style>
 </head>
 <body>
@@ -104,6 +111,14 @@
       <button type="submit" id="submitBtn">Proceed to Webinar</button>
       <div class="msg" id="msg"></div>
     </form>
+
+    <div id="alreadyRegistered">
+      <h2>You're already registered!</h2>
+      <p>Welcome back, <strong id="regName"></strong>.</p>
+      <button type="button" id="joinBtn">Join Meeting</button>
+      <br>
+      <button type="button" class="btn-ghost" id="notYouBtn">Not you? Register with different details</button>
+    </div>
   </div>
 
   <script>
@@ -116,6 +131,33 @@
     const form = document.getElementById("regForm");
     const btn = document.getElementById("submitBtn");
     const msg = document.getElementById("msg");
+    const STORAGE_KEY = "webinar_reg";
+
+    // If already registered on this device, skip the form entirely.
+    (function checkExisting() {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (!saved) return;
+        const reg = JSON.parse(saved);
+        form.style.display = "none";
+        document.querySelector(".sub").style.display = "none";
+        document.getElementById("regName").textContent = reg.parentName || "there";
+        document.getElementById("alreadyRegistered").style.display = "block";
+      } catch (e) {
+        localStorage.removeItem(STORAGE_KEY);
+      }
+    })();
+
+    document.getElementById("joinBtn").addEventListener("click", async () => {
+      const link = meetLink || await fetch(SCRIPT_URL, { method: "GET" })
+        .then((r) => r.json()).then((d) => d.meetLink).catch(() => null);
+      if (link) window.location.href = link;
+    });
+
+    document.getElementById("notYouBtn").addEventListener("click", () => {
+      localStorage.removeItem(STORAGE_KEY);
+      location.reload();
+    });
 
     // Pre-fetch the (dynamic) Meet link while the user fills the form,
     // so that on submit we can redirect instantly without waiting.
@@ -169,6 +211,7 @@
       // FAST PATH: link already loaded -> save in background, redirect now.
       if (meetLink) {
         saveInBackground(data).catch(() => {});
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ parentName: data.parentName, parentNumber: data.parentNumber, studentName: data.studentName, timestamp: new Date().toISOString() }));
         window.location.href = meetLink;
         return;
       }
@@ -179,6 +222,7 @@
         const res = await saveInBackground(data);
         const result = await res.json();
         if (result.meetLink) {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify({ parentName: data.parentName, parentNumber: data.parentNumber, studentName: data.studentName, timestamp: new Date().toISOString() }));
           window.location.href = result.meetLink;
         } else {
           throw new Error(result.message || "No webinar link configured.");
