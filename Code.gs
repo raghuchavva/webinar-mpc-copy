@@ -13,6 +13,9 @@
  * Setup steps are in README.md.
  */
 
+// Google Sheet ID to use for registration data
+var SPREADSHEET_ID = "1EpRMjMNY2195-Cs4LevPTdQw1Ht3JBdyKZw6ItZ9CDw";
+
 // Name of the tab where registrations are stored
 var REG_SHEET   = "Registrations";
 // Name of the tab that holds the editable Meet link
@@ -24,7 +27,7 @@ function doPost(e) {
   try {
     var data = JSON.parse(e.postData.contents);
 
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getSpreadsheet();
 
     // --- 1. Save the registration ---
     var sheet = ss.getSheetByName(REG_SHEET);
@@ -72,9 +75,14 @@ function getMeetLink(ss) {
   return config.getRange(MEET_CELL).getValue();
 }
 
+/** Returns the configured spreadsheet by ID. */
+function getSpreadsheet() {
+  return SpreadsheetApp.openById(SPREADSHEET_ID);
+}
+
 /** Optional: lets you test by opening the web app URL in a browser. */
 function doGet() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getSpreadsheet();
   return json({ status: "ok", meetLink: getMeetLink(ss) });
 }
 
