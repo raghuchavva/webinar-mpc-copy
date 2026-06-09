@@ -97,9 +97,10 @@
       <label for="parentName">Parent Name</label>
       <input type="text" id="parentName" name="parentName" required />
 
-      <label for="parent Mobile Number">Parent Mobile Number</label>
-      <input type="tel" id="parent Mobile Number" name="parentNumber" required
-             pattern="[0-9+\-\s]{7,15}" title="Enter a valid phone number" />
+      <label for="parentNumber">Parent Mobile Number</label>
+      <input type="tel" id="parentNumber" name="parentNumber" required
+             pattern="(\+91|0)?[6-9][0-9]{9}"
+             title="Enter a valid 10-digit Indian mobile number (e.g. 9876543210)" />
 
       <label for="studentName">Student Name</label>
       <input type="text" id="studentName" name="studentName" required />
@@ -107,6 +108,9 @@
       <label for="student Mobile Number">Student Number <span style="font-weight:400;color:#9ca3af;">(optional)</span></label>
       <input type="tel" id="studentNumber" name="studentNumber"
              pattern="[0-9+\-\s]{7,15}" title="Enter a valid phone number" />
+
+      <label for="city">City</label>
+      <input type="text" id="city" name="city" required />
 
       <button type="submit" id="submitBtn">Proceed to Webinar</button>
       <div class="msg" id="msg"></div>
@@ -175,17 +179,18 @@
         parentNumber: form.parentNumber.value.trim(),
         studentName: form.studentName.value.trim(),
         studentNumber: form.studentNumber.value.trim(),
+        city: form.city.value.trim(),
       };
     }
 
-    // Send the registration request and wait for the server response
-    function postRegistration(data) {
-      return fetch(SCRIPT_URL, {
+    const PHONE_RE = /^(\+91|0)?[6-9][0-9]{9}$/;
+
+    function saveInBackground(data) {
+      fetch(SCRIPT_URL, {
         method: "POST",
-        // text/plain avoids a CORS preflight against Apps Script
         headers: { "Content-Type": "text/plain;charset=utf-8" },
         body: JSON.stringify(data),
-      });
+      }).catch(() => {});
     }
 
     form.addEventListener("submit", async (e) => {
@@ -199,6 +204,13 @@
         return;
       }
 
+      const parentNum = form.parentNumber.value.trim();
+      if (!PHONE_RE.test(parentNum)) {
+        msg.textContent = "Enter a valid 10-digit Indian mobile number (e.g. 9876543210).";
+        msg.className = "msg error";
+        return;
+      }
+
       btn.disabled = true;
       btn.textContent = "Joining your webinar…";
       msg.textContent = "Joining your webinar…";
@@ -206,37 +218,25 @@
 
       const data = buildData();
 
-      // FAST PATH: link already loaded -> save first, then redirect.
+      // FAST PATH: link already pre-fetched -> redirect immediately, save in background.
       if (meetLink) {
-        try {
-          const res = await postRegistration(data);
-          const result = await res.json();
-          if (result.meetLink) {
-            meetLink = result.meetLink;
-          }
-        } catch (err) {
-          msg.textContent = "Something went wrong saving your registration: " + err.message;
-          msg.className = "msg error";
-          btn.disabled = false;
-          btn.textContent = "Proceed to Webinar";
-          return;
-        }
-
         localStorage.setItem(STORAGE_KEY, JSON.stringify({ parentName: data.parentName, parentNumber: data.parentNumber, studentName: data.studentName, timestamp: new Date().toISOString() }));
+        saveInBackground(data);
         window.location.href = meetLink;
         return;
       }
 
-      // FALLBACK: link not loaded yet -> wait for the save response,
-      // which also returns the Meet link.
+      // FALLBACK: link not yet loaded -> fetch it quickly, then redirect.
       try {
-        const res = await postRegistration(data);
+        const res = await fetch(SCRIPT_URL, { method: "GET" });
         const result = await res.json();
         if (result.meetLink) {
+          meetLink = result.meetLink;
           localStorage.setItem(STORAGE_KEY, JSON.stringify({ parentName: data.parentName, parentNumber: data.parentNumber, studentName: data.studentName, timestamp: new Date().toISOString() }));
-          window.location.href = result.meetLink;
+          saveInBackground(data);
+          window.location.href = meetLink;
         } else {
-          throw new Error(result.message || "No webinar link configured.");
+          throw new Error("No webinar link configured.");
         }
       } catch (err) {
         msg.textContent = "Something went wrong: " + err.message;
